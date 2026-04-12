@@ -18,11 +18,9 @@ export function useUser() {
     let cancelled = false;
 
     function loadProfileForUser(userId: string) {
-      return supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle()
+      return Promise.resolve(
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+      )
         .then(({ data, error }) => {
           if (error) console.error('profiles select:', error.message);
           if (!cancelled) setProfile((data as Profile | null) ?? null);

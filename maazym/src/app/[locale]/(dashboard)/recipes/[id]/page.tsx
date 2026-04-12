@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ArrowRight, ArrowLeft, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { PostgrestError } from '@supabase/supabase-js';
 import { withTimeout } from '@/lib/with-timeout';
 
 export default function RecipeDetailPage({ params }: { params: Promise<{ id: string; locale: string }> }) {
@@ -31,7 +32,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
   async function loadRecipe() {
     try {
       const supabase = createClient();
-      const { data, error } = await withTimeout(
+      const { data, error } = (await withTimeout(
         supabase
           .from('recipes')
           .select('*, category:categories(*), ingredients:recipe_ingredients(*, inventory_item:inventory_items(*))')
@@ -39,7 +40,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
           .single(),
         30_000,
         'loadRecipe'
-      );
+      )) as { data: Recipe | null; error: PostgrestError | null };
 
       if (error) console.error('loadRecipe error:', error);
       setRecipe(data ?? null);
