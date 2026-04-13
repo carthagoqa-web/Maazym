@@ -11,7 +11,6 @@ import {
 } from 'react';
 import { useLocale } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
-import { publicStorageObjectUrl } from '@/lib/public-storage-url';
 
 const BUCKET = 'site-assets';
 
@@ -41,39 +40,41 @@ export function SiteBrandingProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from('site_branding')
-      .select('logo_path, updated_at, outlet_name_en, outlet_name_ar')
-      .eq('id', 1)
-      .maybeSingle();
+    // select('*') so production DBs that only ran 00012 (no outlet columns yet) still return logo_path.
+    // Explicit column lists error when outlet_name_* columns are missing, and the whole row is dropped.
+    const { data, error } = await supabase.from('site_branding').select('*').eq('id', 1).maybeSingle();
 
-    if (data) {
-      const en =
-        typeof data.outlet_name_en === 'string' && data.outlet_name_en.trim()
-          ? data.outlet_name_en.trim()
-          : DEFAULT_OUTLET_EN;
-      const ar =
-        typeof data.outlet_name_ar === 'string' && data.outlet_name_ar.trim()
-          ? data.outlet_name_ar.trim()
-          : DEFAULT_OUTLET_AR;
-      setOutletNameEn(en);
-      setOutletNameAr(ar);
-
-      if (data.logo_path) {
-        const base = publicStorageObjectUrl(BUCKET, data.logo_path);
-        if (base) {
-          const v = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
-          setLogoUrl(`${base}?v=${v}`);
-        } else {
-          setLogoUrl(null);
-        }
-      } else {
-        setLogoUrl(null);
-      }
-    } else {
+    if (error || !data) {
       setLogoUrl(null);
       setOutletNameEn(DEFAULT_OUTLET_EN);
       setOutletNameAr(DEFAULT_OUTLET_AR);
+      return;
+    }
+
+    const row = data as {
+      logo_path?: string | null;
+      updated_at?: string | null;
+      outlet_name_en?: string | null;
+      outlet_name_ar?: string | null;
+    };
+
+    const en =
+      typeof row.outlet_name_en === 'string' && row.outlet_name_en.trim()
+        ? row.outlet_name_en.trim()
+        : DEFAULT_OUTLET_EN;
+    const ar =
+      typeof row.outlet_name_ar === 'string' && row.outlet_name_ar.trim()
+        ? row.outlet_name_ar.trim()
+        : DEFAULT_OUTLET_AR;
+    setOutletNameEn(en);
+    setOutletNameAr(ar);
+
+    if (row.logo_path) {
+      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(row.logo_path);
+      const v = row.updated_at ? new Date(row.updated_at).getTime() : Date.now();
+      setLogoUrl(`${pub.publicUrl}?v=${v}`);
+    } else {
+      setLogoUrl(null);
     }
   }, []);
 

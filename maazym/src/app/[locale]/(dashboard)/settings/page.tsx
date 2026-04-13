@@ -312,13 +312,13 @@ export default function SettingsPage() {
       setIntegrationsLoading(true);
       const supabase = createClient();
       const [brandRes, intRes] = await Promise.all([
-        supabase.from('site_branding').select('outlet_name_en, outlet_name_ar').eq('id', 1).maybeSingle(),
+        supabase.from('site_branding').select('*').eq('id', 1).maybeSingle(),
         supabase.from('site_integrations').select('*').eq('id', 1).maybeSingle(),
       ]);
       if (cancelled) return;
       setIntegrationsLoading(false);
       if (brandRes.data) {
-        const b = brandRes.data as Pick<SiteBranding, 'outlet_name_en' | 'outlet_name_ar'>;
+        const b = brandRes.data as Partial<SiteBranding>;
         setOutletNameEn(b.outlet_name_en?.trim() || 'Maazym');
         setOutletNameAr(b.outlet_name_ar?.trim() || 'معزم');
       }
