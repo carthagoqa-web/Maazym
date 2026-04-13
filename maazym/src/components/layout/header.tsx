@@ -16,6 +16,9 @@ import {
 import { LanguageToggle } from './language-toggle';
 import { Bell, LogOut, User, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SiteLogo } from '@/components/site-logo';
+import { useSiteBranding } from '@/contexts/site-branding';
+import Link from 'next/link';
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -28,6 +31,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const locale = useLocale();
   const router = useRouter();
   const { profile } = useUser();
+  const { outletDisplayName } = useSiteBranding();
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -44,7 +48,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
     .slice(0, 2) || '??';
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+    <header className="sticky top-0 z-20 flex min-h-16 items-center gap-3 border-b bg-background px-4 py-2 md:gap-4 md:px-6">
       <Button
         variant="ghost"
         size="icon"
@@ -53,6 +57,16 @@ export function Header({ onMenuToggle }: HeaderProps) {
       >
         <Menu className="h-5 w-5" />
       </Button>
+
+      <Link
+        href={`/${locale}`}
+        className="flex items-center gap-2.5 shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <SiteLogo size={52} className="rounded-xl" />
+        <span className="hidden max-w-[200px] truncate font-semibold tracking-tight sm:inline md:max-w-[280px]">
+          {outletDisplayName}
+        </span>
+      </Link>
 
       <div className="flex-1" />
 

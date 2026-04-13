@@ -19,6 +19,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, Edit, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  isPromotionActiveBySchedule as isActiveBySchedule,
+  isPromotionExpiringThisWeek as isExpiringThisWeek,
+  startOfTodayLocal,
+} from '@/lib/promotion-schedule';
 
 const PROMO_TYPES: PromotionType[] = [
   'percentage_discount',
@@ -33,36 +38,6 @@ const DAY_INDICES = [0, 1, 2, 3, 4, 5, 6] as const;
 type PromotionRow = Promotion & {
   items?: (PromotionItem & { menu_item?: MenuItem | null })[];
 };
-
-function parseLocalDate(s: string | null): Date | null {
-  if (!s) return null;
-  const [y, m, d] = s.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
-}
-
-function startOfToday(): Date {
-  const t = new Date();
-  return new Date(t.getFullYear(), t.getMonth(), t.getDate());
-}
-
-function isActiveBySchedule(p: Promotion, today: Date): boolean {
-  if (!p.is_active) return false;
-  const start = parseLocalDate(p.start_date);
-  const end = parseLocalDate(p.end_date);
-  if (start && today < start) return false;
-  if (end && today > end) return false;
-  return true;
-}
-
-function isExpiringThisWeek(p: Promotion, today: Date): boolean {
-  if (!p.is_active || !p.end_date) return false;
-  const end = parseLocalDate(p.end_date);
-  if (!end) return false;
-  const weekEnd = new Date(today);
-  weekEnd.setDate(weekEnd.getDate() + 7);
-  return end >= today && end <= weekEnd;
-}
 
 function formatTimeForInput(t: string | null): string {
   if (!t) return '';
@@ -130,7 +105,7 @@ export default function PromotionsPage() {
   const getName = (item: { name_ar: string; name_en: string }) =>
     locale === 'ar' ? item.name_ar : item.name_en;
 
-  const today = useMemo(() => startOfToday(), []);
+  const today = useMemo(() => startOfTodayLocal(), []);
 
   const stats = useMemo(() => {
     const total = rows.length;

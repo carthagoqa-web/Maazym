@@ -397,6 +397,15 @@ export default function PurchaseOrdersPage() {
       toast.success(t('submitSuccess'));
       await refreshPo(detailPo.id);
       loadData();
+      try {
+        await fetch('/api/notify/purchase-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ purchase_order_id: detailPo.id }),
+        });
+      } catch {
+        /* Telegram is best-effort */
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : tCommon('error');
       toast.error(msg);

@@ -61,9 +61,9 @@ const CHART_COLORS = {
   bar: 'var(--chart-1)',
   bar2: 'var(--chart-2)',
   bar3: 'var(--chart-3)',
-  pie1: '#22c55e',
-  pie2: '#eab308',
-  pie3: '#ef4444',
+  pie1: 'var(--chart-2)',
+  pie2: 'var(--chart-3)',
+  pie3: 'var(--chart-4)',
 };
 
 function marginPercent(selling: number, cost: number): number | null {

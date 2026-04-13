@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
-import type { Branch, Category, InventoryCategory, PricingConfig, Profile, RecipeType, UserRole } from '@/types/database';
+import type {
+  Branch,
+  Category,
+  InventoryCategory,
+  PricingConfig,
+  Profile,
+  RecipeType,
+  SiteBranding,
+  SiteIntegrations,
+  UserRole,
+} from '@/types/database';
 import {
   canAccessUsersSettings,
   canDeleteInventoryCatalog,
@@ -16,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -28,9 +39,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, KeyRound, Loader2, Upload, Edit } from 'lucide-react';
+import { Plus, Trash2, KeyRound, Loader2, Upload, Edit, ImageIcon, MessageSquare, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { SiteLogo } from '@/components/site-logo';
+import { SITE_BRANDING_CHANGED } from '@/contexts/site-branding';
 
 const DEFAULT_BRANCH_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -100,6 +113,16 @@ export default function SettingsPage() {
     phone: '',
   });
 
+  const [telegramToken, setTelegramToken] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [telegramTemplate, setTelegramTemplate] = useState('');
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [integrationsSaving, setIntegrationsSaving] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [outletNameEn, setOutletNameEn] = useState('Maazym');
+  const [outletNameAr, setOutletNameAr] = useState('معزم');
+  const [outletSaving, setOutletSaving] = useState(false);
+
   const [recipeForm, setRecipeForm] = useState({
     id: '' as string | null,
     name_ar: '',
@@ -129,6 +152,11 @@ export default function SettingsPage() {
     }
     return profiles;
   }, [profiles, myProfile?.role]);
+
+  const activeBranch = useMemo(
+    () => allBranches.find((b) => b.id === branchId),
+    [allBranches, branchId]
+  );
 
   const mapUserApiError = useCallback(
     (msg: string | undefined) => {
@@ -276,6 +304,34 @@ export default function SettingsPage() {
   useEffect(() => {
     bootstrap();
   }, [bootstrap]);
+
+  useEffect(() => {
+    if (loading || myProfile?.role !== 'admin') return;
+    let cancelled = false;
+    (async () => {
+      setIntegrationsLoading(true);
+      const supabase = createClient();
+      const [brandRes, intRes] = await Promise.all([
+        supabase.from('site_branding').select('outlet_name_en, outlet_name_ar').eq('id', 1).maybeSingle(),
+        supabase.from('site_integrations').select('*').eq('id', 1).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      setIntegrationsLoading(false);
+      if (brandRes.data) {
+        const b = brandRes.data as Pick<SiteBranding, 'outlet_name_en' | 'outlet_name_ar'>;
+        setOutletNameEn(b.outlet_name_en?.trim() || 'Maazym');
+        setOutletNameAr(b.outlet_name_ar?.trim() || 'معزم');
+      }
+      if (intRes.error || !intRes.data) return;
+      const row = intRes.data as SiteIntegrations;
+      setTelegramToken(row.telegram_bot_token ?? '');
+      setTelegramChatId(row.telegram_chat_id ?? '');
+      setTelegramTemplate(row.telegram_message_template ?? '');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, myProfile?.role]);
 
   const roleBadgeClass = (role: UserRole) =>
     cn(
@@ -513,6 +569,100 @@ export default function SettingsPage() {
 
   function branchLabel(b: Branch) {
     return locale === 'ar' ? b.name_ar : b.name_en;
+  }
+
+  async function saveOutletBranding() {
+    const en = outletNameEn.trim() || 'Maazym';
+    const ar = outletNameAr.trim() || 'معزم';
+    setOutletSaving(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('site_branding')
+      .update({
+        outlet_name_en: en,
+        outlet_name_ar: ar,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 1);
+    setOutletSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(tCommon('updated'));
+    window.dispatchEvent(new Event(SITE_BRANDING_CHANGED));
+  }
+
+  async function saveTelegramIntegration() {
+    setIntegrationsSaving(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('site_integrations')
+      .update({
+        telegram_bot_token: telegramToken.trim() || null,
+        telegram_chat_id: telegramChatId.trim() || null,
+        telegram_message_template: telegramTemplate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 1);
+    setIntegrationsSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(tCommon('updated'));
+  }
+
+  async function uploadSiteLogo(file: File) {
+    const extRaw = file.name.split('.').pop()?.toLowerCase() ?? '';
+    const allowed = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'];
+    if (!allowed.includes(extRaw)) {
+      toast.error(t('logoInvalidType'));
+      return;
+    }
+    const ext = extRaw === 'jpg' ? 'jpeg' : extRaw;
+    const path = `branding/logo.${ext}`;
+    setLogoUploading(true);
+    const supabase = createClient();
+    const { error: upErr } = await supabase.storage.from('site-assets').upload(path, file, {
+      upsert: true,
+      contentType: file.type || `image/${ext}`,
+    });
+    if (upErr) {
+      setLogoUploading(false);
+      toast.error(upErr.message);
+      return;
+    }
+    const { error: dbErr } = await supabase
+      .from('site_branding')
+      .update({ logo_path: path, updated_at: new Date().toISOString() })
+      .eq('id', 1);
+    setLogoUploading(false);
+    if (dbErr) {
+      toast.error(dbErr.message);
+      return;
+    }
+    toast.success(t('logoUpdated'));
+    window.dispatchEvent(new Event(SITE_BRANDING_CHANGED));
+  }
+
+  async function removeSiteLogo() {
+    const supabase = createClient();
+    const { data: row } = await supabase.from('site_branding').select('logo_path').eq('id', 1).maybeSingle();
+    const p = row?.logo_path;
+    if (p) {
+      await supabase.storage.from('site-assets').remove([p]);
+    }
+    const { error } = await supabase
+      .from('site_branding')
+      .update({ logo_path: null, updated_at: new Date().toISOString() })
+      .eq('id', 1);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(tCommon('updated'));
+    window.dispatchEvent(new Event(SITE_BRANDING_CHANGED));
   }
 
   async function updateProfileBranch(profileId: string, newBranchId: string) {
@@ -830,8 +980,10 @@ export default function SettingsPage() {
                 void loadBranchData(next, { loadProfiles: false });
               }}
             >
-              <SelectTrigger>
-                <SelectValue />
+              <SelectTrigger className="w-full max-w-md">
+                <SelectValue placeholder={t('activeBranch')}>
+                  {activeBranch ? branchLabel(activeBranch) : branchId}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {allBranches.map((b) => (
@@ -853,6 +1005,9 @@ export default function SettingsPage() {
           ) : null}
           {canManageBranches(myProfile?.role) ? (
             <TabsTrigger value="branches">{t('branchesManage')}</TabsTrigger>
+          ) : null}
+          {myProfile?.role === 'admin' ? (
+            <TabsTrigger value="integrations">{t('integrations')}</TabsTrigger>
           ) : null}
           <TabsTrigger value="categories">{t('categoriesTitle')}</TabsTrigger>
         </TabsList>
@@ -977,7 +1132,14 @@ export default function SettingsPage() {
                                     }
                                   >
                                     <SelectTrigger className="w-[min(220px,50vw)]">
-                                      <SelectValue placeholder={t('userBranch')} />
+                                      <SelectValue placeholder={t('userBranch')}>
+                                        {(() => {
+                                          const pb = allBranches.find(
+                                            (b) => b.id === (p.branch_id ?? DEFAULT_BRANCH_ID)
+                                          );
+                                          return pb ? branchLabel(pb) : (p.branch_id ?? DEFAULT_BRANCH_ID);
+                                        })()}
+                                      </SelectValue>
                                     </SelectTrigger>
                                     <SelectContent>
                                       {allBranches.map((b) => (
@@ -1139,7 +1301,12 @@ export default function SettingsPage() {
                         }}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={t('userBranch')} />
+                          <SelectValue placeholder={t('userBranch')}>
+                            {(() => {
+                              const pb = allBranches.find((b) => b.id === addUserForm.branch_id);
+                              return pb ? branchLabel(pb) : addUserForm.branch_id;
+                            })()}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {allBranches.map((b) => (
@@ -1414,6 +1581,148 @@ export default function SettingsPage() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
+
+        {myProfile?.role === 'admin' ? (
+          <TabsContent value="integrations" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ImageIcon className="h-5 w-5" />
+                  {t('brandingCardTitle')}
+                </CardTitle>
+                <CardDescription>{t('brandingCardHint')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6 max-w-xl">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <SiteLogo size={112} className="rounded-xl border bg-card p-2 shrink-0" />
+                  <div className="flex flex-col gap-2 min-w-0">
+                    <Label>{t('siteLogo')}</Label>
+                    <Input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                      className="max-w-xs cursor-pointer"
+                      disabled={logoUploading}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = '';
+                        if (f) void uploadSiteLogo(f);
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">{t('siteLogoHint')}</p>
+                    <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => void removeSiteLogo()}>
+                      {t('removeLogo')}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t pt-6">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    <span className="font-medium">{t('outletNames')}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{t('outletNamesHint')}</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="outlet-en">{t('outletNameEn')}</Label>
+                    <Input
+                      id="outlet-en"
+                      dir="ltr"
+                      value={outletNameEn}
+                      onChange={(e) => setOutletNameEn(e.target.value)}
+                      disabled={integrationsLoading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="outlet-ar">{t('outletNameAr')}</Label>
+                    <Input
+                      id="outlet-ar"
+                      dir="rtl"
+                      value={outletNameAr}
+                      onChange={(e) => setOutletNameAr(e.target.value)}
+                      disabled={integrationsLoading}
+                    />
+                  </div>
+                  <Button type="button" onClick={() => void saveOutletBranding()} disabled={outletSaving || integrationsLoading}>
+                    {outletSaving ? tCommon('loading') : t('saveOutletNames')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5" />
+                  {t('telegramTitle')}
+                </CardTitle>
+                <CardDescription>{t('telegramHint')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 max-w-2xl">
+                {integrationsLoading ? (
+                  <Skeleton className="h-32 w-full" />
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="tg-token">{t('telegramBotToken')}</Label>
+                      <Input
+                        id="tg-token"
+                        type="password"
+                        autoComplete="off"
+                        value={telegramToken}
+                        onChange={(e) => setTelegramToken(e.target.value)}
+                        placeholder="123456789:AA..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tg-chat">{t('telegramChatId')}</Label>
+                      <Input
+                        id="tg-chat"
+                        autoComplete="off"
+                        value={telegramChatId}
+                        onChange={(e) => setTelegramChatId(e.target.value)}
+                        placeholder="-100..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tg-template">{t('telegramTemplate')}</Label>
+                      <Textarea
+                        id="tg-template"
+                        rows={12}
+                        className="font-mono text-sm"
+                        value={telegramTemplate}
+                        onChange={(e) => setTelegramTemplate(e.target.value)}
+                      />
+                      <div className="text-xs text-muted-foreground">
+                        <p className="font-medium">{t('telegramPlaceholdersIntro')}</p>
+                        <ul className="mt-2 list-none space-y-1 ps-0">
+                          {(
+                            [
+                              ['{{branch_name}}', 'telegramPh_branch_name'],
+                              ['{{user_name}}', 'telegramPh_user_name'],
+                              ['{{order_date}}', 'telegramPh_order_date'],
+                              ['{{supplier_name}}', 'telegramPh_supplier_name'],
+                              ['{{total_amount}}', 'telegramPh_total_amount'],
+                              ['{{items_list}}', 'telegramPh_items_list'],
+                              ['{{po_short_id}}', 'telegramPh_po_short_id'],
+                            ] as const
+                          ).map(([token, descKey]) => (
+                            <li key={token} className="flex flex-wrap gap-x-1 gap-y-0.5">
+                              <code className="rounded bg-muted px-1 font-mono text-[0.7rem] text-foreground">{token}</code>
+                              <span>—</span>
+                              <span>{t(descKey)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                    <Button type="button" onClick={() => void saveTelegramIntegration()} disabled={integrationsSaving}>
+                      {integrationsSaving ? tCommon('loading') : tCommon('save')}
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

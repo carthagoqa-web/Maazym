@@ -324,3 +324,19 @@ export interface DailyStockSummary {
   today_received: number;
   branch_id: string | null;
 }
+
+export interface SiteBranding {
+  id: number;
+  logo_path: string | null;
+  outlet_name_en: string;
+  outlet_name_ar: string;
+  updated_at: string;
+}
+
+export interface SiteIntegrations {
+  id: number;
+  telegram_bot_token: string | null;
+  telegram_chat_id: string | null;
+  telegram_message_template: string | null;
+  updated_at: string;
+}

@@ -17,7 +17,7 @@ export default function DashboardLayout({
   const isRtl = locale === 'ar';
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-muted/40">
       <div className="hidden md:block">
         <Sidebar />
       </div>
@@ -31,7 +31,7 @@ export default function DashboardLayout({
       <div className={cn('flex flex-col transition-all duration-300', isRtl ? 'md:mr-64' : 'md:ml-64')}>
         <Header onMenuToggle={() => setMobileMenuOpen(true)} />
         <main className="flex-1 p-4 md:p-6">
-          {children}
+          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
         </main>
       </div>
     </div>

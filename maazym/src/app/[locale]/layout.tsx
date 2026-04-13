@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { SiteBrandingProvider } from '@/contexts/site-branding';
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -31,10 +32,12 @@ export default async function LocaleLayout({
   return (
     <div lang={locale} dir={dir} className="min-h-screen">
       <NextIntlClientProvider locale={locale} messages={messages}>
-        <TooltipProvider>
-          {children}
-          <Toaster position={locale === 'ar' ? 'bottom-left' : 'bottom-right'} />
-        </TooltipProvider>
+        <SiteBrandingProvider>
+          <TooltipProvider>
+            {children}
+            <Toaster position={locale === 'ar' ? 'bottom-left' : 'bottom-right'} />
+          </TooltipProvider>
+        </SiteBrandingProvider>
       </NextIntlClientProvider>
     </div>
   );

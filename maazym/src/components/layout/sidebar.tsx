@@ -18,6 +18,8 @@ import {
   ChevronRight,
   ChevronLeft,
 } from 'lucide-react';
+import { SiteLogo } from '@/components/site-logo';
+import { useSiteBranding } from '@/contexts/site-branding';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { useMemo, useState } from 'react';
@@ -65,6 +67,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const isRtl = locale === 'ar';
   const { profile } = useUser();
+  const { outletDisplayName } = useSiteBranding();
   const navItems = useMemo(() => navItemsForRole(profile?.role), [profile?.role]);
 
   const CollapseIcon = isRtl
@@ -79,20 +82,16 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-64'
       )}
     >
-      <div className="flex h-16 items-center justify-between border-b px-4">
+      <div className="flex min-h-16 items-center justify-between border-b px-3 py-2.5">
         {!collapsed && (
-          <Link href={`/${locale}`} className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <UtensilsCrossed className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-lg">
-              {locale === 'ar' ? 'معزم' : 'Maazym'}
-            </span>
+          <Link href={`/${locale}`} className="flex items-center gap-2.5 min-w-0">
+            <SiteLogo size={48} className="rounded-xl shrink-0" />
+            <span className="font-bold text-lg leading-tight truncate">{outletDisplayName}</span>
           </Link>
         )}
         {collapsed && (
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center mx-auto">
-            <UtensilsCrossed className="w-4 h-4 text-primary-foreground" />
+          <div className="mx-auto py-0.5">
+            <SiteLogo size={44} className="rounded-xl" />
           </div>
         )}
       </div>
@@ -110,10 +109,10 @@ export function Sidebar() {
                 key={item.key}
                 href={fullHref}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200',
                   isActive
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                    ? 'bg-primary/12 text-primary shadow-sm ring-1 ring-primary/15'
+                    : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground',
                   collapsed && 'justify-center px-2'
                 )}
                 title={collapsed ? t(item.key) : undefined}
